@@ -5,7 +5,6 @@
 //  Created by 张星宇 on 16/8/27.
 //  Copyright © 2016年 bestswifter. All rights reserved.
 //
-
 #import "BSBacktraceLogger.h"
 #import <mach/mach.h>
 #include <dlfcn.h>
@@ -15,7 +14,6 @@
 #include <string.h>
 #include <mach-o/dyld.h>
 #include <mach-o/nlist.h>
-
 #pragma -mark DEFINE MACRO FOR DIFFERENT CPU ARCHITECTURE
 #if defined(__arm64__)
 #define DETAG_INSTRUCTION_ADDRESS(A) ((A) & ~(3UL))
@@ -24,7 +22,6 @@
 #define BS_FRAME_POINTER __fp
 #define BS_STACK_POINTER __sp
 #define BS_INSTRUCTION_ADDRESS __pc
-
 #elif defined(__arm__)
 #define DETAG_INSTRUCTION_ADDRESS(A) ((A) & ~(1UL))
 #define BS_THREAD_STATE_COUNT ARM_THREAD_STATE_COUNT
@@ -32,7 +29,6 @@
 #define BS_FRAME_POINTER __r[7]
 #define BS_STACK_POINTER __sp
 #define BS_INSTRUCTION_ADDRESS __pc
-
 #elif defined(__x86_64__)
 #define DETAG_INSTRUCTION_ADDRESS(A) (A)
 #define BS_THREAD_STATE_COUNT x86_THREAD_STATE64_COUNT
@@ -40,7 +36,6 @@
 #define BS_FRAME_POINTER __rbp
 #define BS_STACK_POINTER __rsp
 #define BS_INSTRUCTION_ADDRESS __rip
-
 #elif defined(__i386__)
 #define DETAG_INSTRUCTION_ADDRESS(A) (A)
 #define BS_THREAD_STATE_COUNT x86_THREAD_STATE32_COUNT
@@ -48,11 +43,8 @@
 #define BS_FRAME_POINTER __ebp
 #define BS_STACK_POINTER __esp
 #define BS_INSTRUCTION_ADDRESS __eip
-
 #endif
-
 #define CALL_INSTRUCTION_FROM_RETURN_ADDRESS(A) (DETAG_INSTRUCTION_ADDRESS((A)) - 1)
-
 #if defined(__LP64__)
 #define TRACE_FMT         "%-4d%-31s 0x%016lx %s + %lu"
 #define POINTER_FMT       "0x%016lx"
@@ -64,33 +56,25 @@
 #define POINTER_SHORT_FMT "0x%lx"
 #define BS_NLIST struct nlist
 #endif
-
 typedef struct BSStackFrameEntry{
     const struct BSStackFrameEntry *const previous;
     const uintptr_t return_address;
 } BSStackFrameEntry;
-
 static mach_port_t main_thread_id;
-
 @implementation BSBacktraceLogger
-
 + (void)load {
     main_thread_id = mach_thread_self();
 }
-
 #pragma -mark Implementation of interface
 + (NSString *)bs_backtraceOfNSThread:(NSThread *)thread {
     return _bs_backtraceOfThread(bs_machThreadFromNSThread(thread));
 }
-
 + (NSString *)bs_backtraceOfCurrentThread {
     return [self bs_backtraceOfNSThread:[NSThread currentThread]];
 }
-
 + (NSString *)bs_backtraceOfMainThread {
     return [self bs_backtraceOfNSThread:[NSThread mainThread]];
 }
-
 + (NSString *)bs_backtraceOfAllThread {
     thread_act_array_t threads;
     mach_msg_type_number_t thread_count = 0;
@@ -107,9 +91,8 @@ static mach_port_t main_thread_id;
     }
     return [resultString copy];
 }
-
 #pragma -mark Get call backtrace of a mach_thread
-NSString *_bs_backtraceOfThread(thread_t thread) {
+static NSString *_bs_backtraceOfThread(thread_t thread) {
     uintptr_t backtraceBuffer[50];
     int i = 0;
     NSMutableString *resultString = [[NSMutableString alloc] initWithFormat:@"Backtrace of Thread %u:\n", thread];
@@ -158,9 +141,8 @@ NSString *_bs_backtraceOfThread(thread_t thread) {
     [resultString appendFormat:@"\n"];
     return [resultString copy];
 }
-
 #pragma -mark Convert NSThread to Mach thread
-thread_t bs_machThreadFromNSThread(NSThread *nsthread) {
+static thread_t bs_machThreadFromNSThread(NSThread *nsthread) {
     char name[256];
     mach_msg_type_number_t count;
     thread_act_array_t list;
@@ -194,11 +176,10 @@ thread_t bs_machThreadFromNSThread(NSThread *nsthread) {
     [nsthread setName:originName];
     return mach_thread_self();
 }
-
 #pragma -mark GenerateBacbsrackEnrty
-NSString* bs_logBacktraceEntry(const int entryNum,
-                               const uintptr_t address,
-                               const Dl_info* const dlInfo) {
+static NSString* bs_logBacktraceEntry(const int entryNum,
+                                      const uintptr_t address,
+                                      const Dl_info* const dlInfo) {
     char faddrBuff[20];
     char saddrBuff[20];
     
@@ -217,8 +198,7 @@ NSString* bs_logBacktraceEntry(const int entryNum,
     }
     return [NSString stringWithFormat:@"%-30s  0x%08" PRIxPTR " %s + %lu\n" ,fname, (uintptr_t)address, sname, offset];
 }
-
-const char* bs_lastPathEntry(const char* const path) {
+static const char* bs_lastPathEntry(const char* const path) {
     if(path == NULL) {
         return NULL;
     }
@@ -226,57 +206,50 @@ const char* bs_lastPathEntry(const char* const path) {
     char* lastFile = strrchr(path, '/');
     return lastFile == NULL ? path : lastFile + 1;
 }
-
 #pragma -mark HandleMachineContext
-bool bs_fillThreadStateIntoMachineContext(thread_t thread, _STRUCT_MCONTEXT *machineContext) {
+static bool bs_fillThreadStateIntoMachineContext(thread_t thread, _STRUCT_MCONTEXT *machineContext) {
     mach_msg_type_number_t state_count = BS_THREAD_STATE_COUNT;
     kern_return_t kr = thread_get_state(thread, BS_THREAD_STATE, (thread_state_t)&machineContext->__ss, &state_count);
     return (kr == KERN_SUCCESS);
 }
-
-uintptr_t bs_mach_framePointer(mcontext_t const machineContext){
+static uintptr_t bs_mach_framePointer(mcontext_t const machineContext){
     return machineContext->__ss.BS_FRAME_POINTER;
 }
-
-uintptr_t bs_mach_stackPointer(mcontext_t const machineContext){
-    return machineContext->__ss.BS_STACK_POINTER;
-}
-
-uintptr_t bs_mach_instructionAddress(mcontext_t const machineContext){
+//未使用
+// static uintptr_t bs_mach_stackPointer(mcontext_t const machineContext){
+//     return machineContext->__ss.BS_STACK_POINTER;
+// }
+static uintptr_t bs_mach_instructionAddress(mcontext_t const machineContext){
     return machineContext->__ss.BS_INSTRUCTION_ADDRESS;
 }
-
-uintptr_t bs_mach_linkRegister(mcontext_t const machineContext){
+static uintptr_t bs_mach_linkRegister(mcontext_t const machineContext){
 #if defined(__i386__) || defined(__x86_64__)
     return 0;
 #else
     return machineContext->__ss.__lr;
 #endif
 }
-
-kern_return_t bs_mach_copyMem(const void *const src, void *const dst, const size_t numBytes){
+static kern_return_t bs_mach_copyMem(const void *const src, void *const dst, const size_t numBytes){
     vm_size_t bytesCopied = 0;
     return vm_read_overwrite(mach_task_self(), (vm_address_t)src, (vm_size_t)numBytes, (vm_address_t)dst, &bytesCopied);
 }
-
 #pragma -mark Symbolicate
-void bs_symbolicate(const uintptr_t* const backtraceBuffer,
-                    Dl_info* const symbolsBuffer,
-                    const int numEntries,
-                    const int skippedEntries){
+static void bs_symbolicate(const uintptr_t* const backtraceBuffer,
+                           Dl_info* const symbolsBuffer,
+                           const int numEntries,
+                           const int skippedEntries){
     int i = 0;
     
     if(!skippedEntries && i < numEntries) {
-        bs_dladdr(backtraceBuffer[i], &symbolsBuffer[i]);
+        dladdr(backtraceBuffer[i], &symbolsBuffer[i]);
         i++;
     }
     
     for(; i < numEntries; i++) {
-        bs_dladdr(CALL_INSTRUCTION_FROM_RETURN_ADDRESS(backtraceBuffer[i]), &symbolsBuffer[i]);
+       dladdr(CALL_INSTRUCTION_FROM_RETURN_ADDRESS(backtraceBuffer[i]), &symbolsBuffer[i]);
     }
 }
-
-bool bs_dladdr(const uintptr_t address, Dl_info* const info) {
+static bool bs_dladdr(const uintptr_t address, Dl_info* const info) {
     info->dli_fname = NULL;
     info->dli_fbase = NULL;
     info->dli_sname = NULL;
@@ -340,8 +313,7 @@ bool bs_dladdr(const uintptr_t address, Dl_info* const info) {
     }
     return true;
 }
-
-uintptr_t bs_firstCmdAfterHeader(const struct mach_header* const header) {
+static uintptr_t bs_firstCmdAfterHeader(const struct mach_header* const header) {
     switch(header->magic) {
         case MH_MAGIC:
         case MH_CIGAM:
@@ -353,8 +325,7 @@ uintptr_t bs_firstCmdAfterHeader(const struct mach_header* const header) {
             return 0;  // Header is corrupt
     }
 }
-
-uint32_t bs_imageIndexContainingAddress(const uintptr_t address) {
+static uint32_t bs_imageIndexContainingAddress(const uintptr_t address) {
     const uint32_t imageCount = _dyld_image_count();
     const struct mach_header* header = 0;
     
@@ -389,8 +360,7 @@ uint32_t bs_imageIndexContainingAddress(const uintptr_t address) {
     }
     return UINT_MAX;
 }
-
-uintptr_t bs_segmentBaseOfImageIndex(const uint32_t idx) {
+static uintptr_t bs_segmentBaseOfImageIndex(const uint32_t idx) {
     const struct mach_header* header = _dyld_get_image_header(idx);
     
     // Look for a segment command and return the file image address.
@@ -416,5 +386,4 @@ uintptr_t bs_segmentBaseOfImageIndex(const uint32_t idx) {
     }
     return 0;
 }
-
 @end
