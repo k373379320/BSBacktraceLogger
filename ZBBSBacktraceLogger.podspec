@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|
   s.name = 'ZBBSBacktraceLogger'
-  s.version = '0.0.3'
+  s.version = '0.1.0'
   s.summary = 'A delightful iOS ZBBSBacktraceLogger framework.'
   s.homepage = 'https://github.com/k373379320/ZBBSBacktraceLogger'
   s.license = { :type => 'MIT', :file => 'LICENSE' }
